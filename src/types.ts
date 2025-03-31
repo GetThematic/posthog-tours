@@ -3,6 +3,7 @@ import posthog from 'posthog-js';
 export interface TourConfig {
   name: string;
   steps: TourStep[];
+  onEligible?: (element: Element, tourId: string) => void;
 }
 
 export interface TourStep {
@@ -17,9 +18,21 @@ export interface FeatureFlagTour {
   tour: TourConfig;
 }
 
+export interface TourEligibilityResult {
+  eligible: boolean;
+  element: Element | null;
+  tourId: string;
+  flagEnabled: boolean;
+  targetPresent: boolean;
+  alreadySeen: boolean;
+}
+
 export interface PostHogToursOptions {
   tours: Record<string, TourConfig>;
   posthogInstance?: typeof posthog;
+  userPropertyPrefix?: string;
+  defaultOnEligible?: (element: Element, tourId: string) => void;
+  checkElementVisibility?: boolean;
 }
 
 export class PostHogNotInitializedError extends Error {
