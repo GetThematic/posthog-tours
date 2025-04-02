@@ -31,23 +31,22 @@ export class PostHogTours {
     // Validate that all provided feature flags exist
     this.validateFeatureFlags();
 
-    // Start monitoring first steps of all tours
-    this.startMonitoringFirstSteps();
+    // Start monitoring all tours
+    this.startMonitoringTours();
   }
 
   private validateFeatureFlags(): void {
     const missingFlags = Object.keys(this.tours).filter(flag => !this.posthog.isFeatureEnabled(flag));
     
     if (missingFlags.length > 0) {
-      throw new PostHogFeatureFlagsNotConfiguredError(missingFlags);
+      console.warn(`PostHog Tours: The following feature flags are not configured: ${missingFlags.join(', ')}. These tours will be ignored.`);
     }
   }
 
-  private startMonitoringFirstSteps(): void {
+  private startMonitoringTours(): void {
     Object.entries(this.tours).forEach(([flagKey, tour]) => {
-      const firstStep = tour.steps[0];
-      if (firstStep?.target) {
-        this.monitorElement(flagKey, firstStep.target);
+      if (tour.target) {
+        this.monitorElement(flagKey, tour.target);
       }
     });
   }
@@ -80,8 +79,7 @@ export class PostHogTours {
 
   public async checkTourEligibility(tourId: string): Promise<TourEligibilityResult> {
     const tour = this.tours[tourId];
-    const firstStep = tour.steps[0];
-    const selector = firstStep?.target;
+    const selector = tour.target;
 
     if (!selector) {
       return {
@@ -214,7 +212,7 @@ export class PostHogTours {
     this.intersectionObservers.clear();
     
     // Start monitoring again
-    this.startMonitoringFirstSteps();
+    this.startMonitoringTours();
   }
 
   public getTourConfig(flagKey: string): TourConfig | undefined {
@@ -223,16 +221,11 @@ export class PostHogTours {
   
   public async forceTour(tourId: string): Promise<boolean> {
     const tour = this.tours[tourId];
-    if (!tour) {
+    if (!tour || !tour.target) {
       return false;
     }
     
-    const firstStep = tour.steps[0];
-    if (!firstStep?.target) {
-      return false;
-    }
-    
-    const element = document.querySelector(firstStep.target);
+    const element = document.querySelector(tour.target);
     if (!element) {
       return false;
     }

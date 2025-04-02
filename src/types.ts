@@ -2,15 +2,8 @@ import posthog from 'posthog-js';
 
 export interface TourConfig {
   name: string;
-  steps: TourStep[];
+  target: string; // CSS selector for the element to highlight
   onEligible?: (element: Element, tourId: string) => void;
-}
-
-export interface TourStep {
-  title: string;
-  content: string;
-  target?: string; // CSS selector for the element to highlight
-  placement?: 'top' | 'bottom' | 'left' | 'right';
 }
 
 export interface FeatureFlagTour {

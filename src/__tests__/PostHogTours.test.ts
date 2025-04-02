@@ -51,26 +51,12 @@ describe('PostHogTours', () => {
   const sampleTours = {
     'feature-a': {
       name: 'Feature A Tour',
-      steps: [
-        {
-          title: 'Welcome to Feature A',
-          content: 'This is a tour for Feature A',
-          target: '#feature-a-element',
-          placement: 'bottom' as const,
-        },
-      ],
+      target: '#feature-a-element'
     },
     'feature-b': {
       name: 'Feature B Tour',
-      steps: [
-        {
-          title: 'Welcome to Feature B',
-          content: 'This is a tour for Feature B',
-          target: '#feature-b-element',
-          placement: 'top' as const,
-        },
-      ],
-    },
+      target: '#feature-b-element'
+    }
   };
 
   beforeEach(() => {

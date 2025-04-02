@@ -26,20 +26,21 @@ yarn add posthog-tours
 ## Usage
 
 ```typescript
-import { PostHogTours } from 'posthog-tours';
+import { PostHogTours } from "posthog-tours";
 
 // Initialize PostHogTours
 const tours = new PostHogTours({
   tours: {
-    'feature-flag-key': {  // This key must match a PostHog feature flag
-      name: 'My Feature Tour',
+    "feature-flag-key": {
+      // This key must match a PostHog feature flag
+      name: "My Feature Tour",
       steps: [
         {
-          title: 'Welcome to the new feature!',
-          content: 'This is a guided tour of our new feature.',
-          target: '.feature-element',  // CSS selector for the element
-          placement: 'bottom'
-        }
+          title: "Welcome to the new feature!",
+          content: "This is a guided tour of our new feature.",
+          target: ".feature-element", // CSS selector for the element
+          properties: "bottom",
+        },
       ],
       onEligible: (element, tourId) => {
         // Custom callback when tour becomes eligible to show
@@ -47,14 +48,15 @@ const tours = new PostHogTours({
 
         // When the user completes or dismisses the tour, mark it as seen
         tours.markTourAsSeen(tourId);
-      }
-    }
+      },
+    },
   },
-  userPropertyPrefix: 'seen_tour_'  // Prefix for PostHog user properties
+  userPropertyPrefix: "seen_tour_", // Prefix for PostHog user properties
 });
 ```
 
 A tour becomes eligible when:
+
 1. The matching feature flag is enabled for the user
 2. The target element is present and visible on the screen
 3. The user has not seen the tour before (based on user properties)

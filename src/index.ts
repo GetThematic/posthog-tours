@@ -15,14 +15,7 @@ const tours = new PostHogTours({
   tours: {
     'feature-flag-key': {
       name: 'My Feature Tour',
-      steps: [
-        {
-          title: 'Welcome to the new feature!',
-          content: 'This is a guided tour of our new feature.',
-          target: '.feature-element', // CSS selector for the element
-          placement: 'bottom'
-        }
-      ],
+      target: '.feature-element', // CSS selector for the element
       onEligible: (element, tourId) => {
         // Custom callback when tour becomes eligible
         // Show your tour UI here

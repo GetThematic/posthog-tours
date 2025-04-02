@@ -22,20 +22,7 @@ function basicSetup() {
     tours: {
       'onboarding-tour': {
         name: 'Welcome Tour',
-        steps: [
-          {
-            title: 'Welcome to our app!',
-            content: 'Let us show you around.',
-            target: '.dashboard-welcome', // CSS selector for the element to highlight
-            placement: 'bottom',
-          },
-          {
-            title: 'Create your first project',
-            content: 'Click here to create your first project.',
-            target: '.create-project-button',
-            placement: 'right',
-          },
-        ],
+        target: '.dashboard-welcome', // CSS selector for the element to highlight
         // This callback runs when all conditions are met
         onEligible: (element, tourId) => {
           console.log(`Tour ${tourId} is ready to be shown`);
@@ -70,14 +57,7 @@ function withJoyrideSample() {
     tours: {
       'new-feature-tour': {
         name: 'New Feature Introduction',
-        steps: [
-          {
-            title: 'New Feature',
-            content: 'Check out our new analytics dashboard.',
-            target: '#analytics-tab',
-            placement: 'bottom',
-          }
-        ],
+        target: '#analytics-tab',
         // The onEligible callback would trigger your React component to show the tour
         onEligible: (element, tourId) => {
           // In a React app, you would set state here to trigger the Joyride component
@@ -106,25 +86,11 @@ function advancedUsage() {
     tours: {
       'dashboard-intro': {
         name: 'Dashboard Introduction',
-        steps: [
-          {
-            title: 'Dashboard Overview',
-            content: 'This is your main dashboard.',
-            target: '.dashboard-container',
-            placement: 'bottom',
-          }
-        ]
+        target: '.dashboard-container'
       },
       'analytics-intro': {
         name: 'Analytics Introduction',
-        steps: [
-          {
-            title: 'Analytics Overview',
-            content: 'Here you can see your analytics.',
-            target: '.analytics-container',
-            placement: 'top',
-          }
-        ]
+        target: '.analytics-container'
       }
     },
     // Default handler for all tours if they don't have their own
