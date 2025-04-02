@@ -34,14 +34,7 @@ const tours = new PostHogTours({
     "feature-flag-key": {
       // This key must match a PostHog feature flag
       name: "My Feature Tour",
-      steps: [
-        {
-          title: "Welcome to the new feature!",
-          content: "This is a guided tour of our new feature.",
-          target: ".feature-element", // CSS selector for the element
-          properties: "bottom",
-        },
-      ],
+      target: ".feature-element", // CSS selector for the element to highlight
       onEligible: (element, tourId) => {
         // Custom callback when tour becomes eligible to show
         // Implementation of your tour UI goes here
@@ -52,6 +45,10 @@ const tours = new PostHogTours({
     },
   },
   userPropertyPrefix: "seen_tour_", // Prefix for PostHog user properties
+  defaultOnEligible: (element, tourId) => {
+    // Default handler for all tours if they don't specify their own
+  },
+  checkElementVisibility: true, // Whether to check if elements are visible before showing tour
 });
 ```
 
@@ -60,6 +57,80 @@ A tour becomes eligible when:
 1. The matching feature flag is enabled for the user
 2. The target element is present and visible on the screen
 3. The user has not seen the tour before (based on user properties)
+
+## Advanced Usage
+
+### Multiple Tours
+
+```typescript
+const tours = new PostHogTours({
+  tours: {
+    "dashboard-intro": {
+      name: "Dashboard Introduction",
+      target: ".dashboard-container",
+      onEligible: (element, tourId) => {
+        // Custom handling for this specific tour
+      },
+    },
+    "analytics-intro": {
+      name: "Analytics Introduction",
+      target: ".analytics-container",
+      // Using defaultOnEligible since no specific handler provided
+    },
+  },
+  defaultOnEligible: (element, tourId) => {
+    // Default handler for all tours that don't specify their own
+    console.log(`Tour ${tourId} is ready to show`);
+    // Your UI implementation here
+  },
+});
+
+// Check eligibility of all tours
+async function checkForEligibleTours() {
+  const results = await tours.checkAllTours();
+
+  // The first eligible tour will have already triggered its callback
+  const eligibleTour = results.find((result) => result.eligible);
+
+  if (eligibleTour) {
+    console.log(`Tour ${eligibleTour.tourId} is now showing`);
+  }
+}
+
+// Force a specific tour to show regardless of conditions
+async function showSpecificTour(tourId: string) {
+  const success = await tours.forceTour(tourId);
+}
+
+// Reset all observers if the app state changes significantly
+function onAppStateChange() {
+  tours.reset();
+}
+```
+
+### Tour Eligibility
+
+A tour becomes eligible when all these conditions are met:
+
+1. The matching feature flag is enabled for the user
+2. The target element is present in the DOM
+3. The element is visible on screen (if `checkElementVisibility` is true)
+4. The user has not seen the tour before (based on user properties)
+
+You can check a specific tour's eligibility:
+
+```typescript
+const result = await tours.checkTourEligibility("feature-flag-key");
+console.log(result);
+// {
+//   eligible: boolean,
+//   element: Element | null,
+//   tourId: string,
+//   flagEnabled: boolean,
+//   targetPresent: boolean,
+//   alreadySeen: boolean
+// }
+```
 
 ## Development
 
