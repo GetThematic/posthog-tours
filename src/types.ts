@@ -33,13 +33,4 @@ export class PostHogNotInitializedError extends Error {
     super('PostHog has not been initialized. Please initialize PostHog before using posthog-tours.');
     this.name = 'PostHogNotInitializedError';
   }
-}
-
-export class PostHogFeatureFlagsNotConfiguredError extends Error {
-  constructor(missingFlags: string[]) {
-    super(
-      `The following feature flags are not configured in PostHog: ${missingFlags.join(', ')}`
-    );
-    this.name = 'PostHogFeatureFlagsNotConfiguredError';
-  }
 } 

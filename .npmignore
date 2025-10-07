@@ -1,0 +1,37 @@
+# Source files
+src/
+
+# Tests
+**/*.test.ts
+**/__tests__/
+
+# Config files
+tsconfig.json
+jest.config.js
+.eslintrc.*
+CLAUDE.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# CI/CD
+.github/
+.travis.yml
+.circleci/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Coverage
+coverage/
+.nyc_output/

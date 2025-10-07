@@ -1,8 +1,7 @@
 import posthog from 'posthog-js';
-import { 
-  PostHogToursOptions, 
-  PostHogNotInitializedError, 
-  PostHogFeatureFlagsNotConfiguredError,
+import {
+  PostHogToursOptions,
+  PostHogNotInitializedError,
   TourConfig,
   TourEligibilityResult
 } from './types';

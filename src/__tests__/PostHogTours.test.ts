@@ -1,4 +1,4 @@
-import { PostHogTours, PostHogNotInitializedError, PostHogFeatureFlagsNotConfiguredError } from '../';
+import { PostHogTours, PostHogNotInitializedError } from '../';
 
 // Mock PostHog
 const mockPosthog = {
@@ -99,15 +99,20 @@ describe('PostHogTours', () => {
     }).toThrow(PostHogNotInitializedError);
   });
 
-  it('should throw if feature flags are not configured', () => {
+  it('should warn if feature flags are not configured', () => {
     mockPosthog.isFeatureEnabled.mockImplementation((flag) => false);
-    
-    expect(() => {
-      new PostHogTours({
-        tours: sampleTours,
-        posthogInstance: mockPosthog as any,
-      });
-    }).toThrow(PostHogFeatureFlagsNotConfiguredError);
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+    new PostHogTours({
+      tours: sampleTours,
+      posthogInstance: mockPosthog as any,
+    });
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('PostHog Tours: The following feature flags are not configured')
+    );
+
+    consoleWarnSpy.mockRestore();
   });
 
   it('should check for existing elements on initialization', () => {
