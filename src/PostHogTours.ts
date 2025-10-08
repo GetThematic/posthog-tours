@@ -14,6 +14,7 @@ export class PostHogTours {
   private userPropertyPrefix: string;
   private defaultOnEligible?: (element: Element, tourId: string) => void;
   private shouldCheckElementVisibility: boolean;
+  private activeTourId: string | null = null;
 
   constructor(options: PostHogToursOptions) {
     this.posthog = options.posthogInstance || posthog;
@@ -117,13 +118,19 @@ export class PostHogTours {
       }
     }
 
-    // We've met all conditions!
+    // We've met all conditions for eligibility!
     result.eligible = true;
 
-    // Call the callback
-    const onEligible = tour.onEligible || this.defaultOnEligible;
-    if (onEligible && element) {
-      onEligible(element, tourId);
+    // Only trigger the tour if no other tour is active
+    if (this.activeTourId === null) {
+      // Set this tour as active before calling the callback
+      this.activeTourId = tourId;
+
+      // Call the callback
+      const onEligible = tour.onEligible || this.defaultOnEligible;
+      if (onEligible && element) {
+        onEligible(element, tourId);
+      }
     }
 
     return result;
@@ -176,14 +183,18 @@ export class PostHogTours {
   public markTourAsSeen(tourId: string): void {
     const properties: Record<string, any> = {};
     properties[`${this.userPropertyPrefix}${tourId}`] = true;
-    
+
     this.posthog.people.set(properties);
-    
+
     // Also capture an event for analytics purposes
     this.posthog.capture('tour_seen', {
       tour_id: tourId,
       tour_name: this.tours[tourId]?.name
     });
+
+    // Clear active tour and check for other eligible tours
+    this.activeTourId = null;
+    this.checkAllTours();
   }
 
   public async checkAllTours(): Promise<TourEligibilityResult[]> {

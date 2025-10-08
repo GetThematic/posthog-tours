@@ -13,12 +13,19 @@ describe('PostHogTours - Element Detection', () => {
     mutationObserverCallbacks = [];
     observerInstances = [];
 
+    // Track user properties
+    const userProperties: Record<string, any> = {};
+
     // Mock PostHog
     mockPosthog = {
       __loaded: true,
       isFeatureEnabled: jest.fn().mockReturnValue(true),
-      get_property: jest.fn().mockReturnValue({}),
-      people: { set: jest.fn() },
+      get_property: jest.fn().mockImplementation(() => userProperties),
+      people: {
+        set: jest.fn().mockImplementation((props) => {
+          Object.assign(userProperties, props);
+        })
+      },
       capture: jest.fn(),
     };
 
@@ -226,7 +233,7 @@ describe('PostHogTours - Element Detection', () => {
 
     document.body.innerHTML = '<div id="container"></div>';
 
-    new PostHogTours({
+    const tours = new PostHogTours({
       tours: {
         'tour-a': {
           name: 'Tour A',
@@ -282,6 +289,15 @@ describe('PostHogTours - Element Detection', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(onEligibleMockA).toHaveBeenCalledTimes(1); // Still just once
+    // Tour B should NOT be called yet because Tour A is still active
+    expect(onEligibleMockB).not.toHaveBeenCalled();
+
+    // Mark tour A as seen, which should trigger check for other tours
+    tours.markTourAsSeen('tour-a');
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Now tour B should be triggered
     expect(onEligibleMockB).toHaveBeenCalledTimes(1);
   });
 
