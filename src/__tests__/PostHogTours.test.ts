@@ -62,11 +62,17 @@ describe('PostHogTours', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
+    // Track user properties
+    const userProperties: Record<string, any> = {};
+
     // Configure mock responses
     mockPosthog.isFeatureEnabled.mockImplementation((flag) => true);
-    mockPosthog.get_property.mockReturnValue({});
-    
+    mockPosthog.get_property.mockImplementation(() => userProperties);
+    mockPosthog.people.set.mockImplementation((props) => {
+      Object.assign(userProperties, props);
+    });
+
     // Set up test DOM
     document.body.innerHTML = `
       <div id="app">
@@ -290,16 +296,94 @@ describe('PostHogTours', () => {
       tours: sampleTours,
       posthogInstance: mockPosthog as any,
     });
-    
+
     // Check that observers are set up
     expect((tours as any).observers.size).toBeGreaterThan(0);
-    
+
     // Reset the tours
     tours.reset();
-    
+
     // Assert that disconnect was called on all observers
     // and observers were recreated
     expect(mockDisconnect).toHaveBeenCalled();
     expect(mockObserve).toHaveBeenCalled();
+  });
+
+  it('should prevent concurrent tours from being triggered', async () => {
+    // Set up DOM with both tour elements
+    document.body.innerHTML = `
+      <div id="app">
+        <div id="feature-a-element"></div>
+        <div id="feature-b-element"></div>
+      </div>
+    `;
+
+    const onEligibleMockA = jest.fn();
+    const onEligibleMockB = jest.fn();
+
+    tours = new PostHogTours({
+      tours: {
+        'feature-a': {
+          ...sampleTours['feature-a'],
+          onEligible: onEligibleMockA,
+        },
+        'feature-b': {
+          ...sampleTours['feature-b'],
+          onEligible: onEligibleMockB,
+        },
+      },
+      posthogInstance: mockPosthog as any,
+      checkElementVisibility: false,
+    });
+
+    // Trigger both tours
+    await tours.checkTourEligibility('feature-a');
+    await tours.checkTourEligibility('feature-b');
+
+    // Only the first tour should have been triggered
+    expect(onEligibleMockA).toHaveBeenCalledTimes(1);
+    expect(onEligibleMockB).not.toHaveBeenCalled();
+  });
+
+  it('should check for other eligible tours after marking one as seen', async () => {
+    // Set up DOM with both tour elements
+    document.body.innerHTML = `
+      <div id="app">
+        <div id="feature-a-element"></div>
+        <div id="feature-b-element"></div>
+      </div>
+    `;
+
+    const onEligibleMockA = jest.fn();
+    const onEligibleMockB = jest.fn();
+
+    tours = new PostHogTours({
+      tours: {
+        'feature-a': {
+          ...sampleTours['feature-a'],
+          onEligible: onEligibleMockA,
+        },
+        'feature-b': {
+          ...sampleTours['feature-b'],
+          onEligible: onEligibleMockB,
+        },
+      },
+      posthogInstance: mockPosthog as any,
+      checkElementVisibility: false,
+    });
+
+    // Trigger first tour
+    await tours.checkTourEligibility('feature-a');
+    expect(onEligibleMockA).toHaveBeenCalledTimes(1);
+    expect(onEligibleMockB).not.toHaveBeenCalled();
+
+    // Mark first tour as seen - this should trigger check for other tours
+    tours.markTourAsSeen('feature-a');
+
+    // Wait for async checkAllTours to complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Second tour should now have been triggered
+    expect(onEligibleMockB).toHaveBeenCalledTimes(1);
   });
 });
