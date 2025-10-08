@@ -169,7 +169,7 @@ export class PostHogTours {
   }
 
   private hasTourBeenSeen(tourId: string): boolean {
-    const userProperties = this.posthog.get_property('$properties') || {};
+    const userProperties = this.posthog.get_property('$stored_person_properties') || {};
     return !!userProperties[`${this.userPropertyPrefix}${tourId}`];
   }
 
