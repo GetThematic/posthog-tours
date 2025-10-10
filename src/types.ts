@@ -26,6 +26,7 @@ export interface PostHogToursOptions {
   userPropertyPrefix?: string;
   defaultOnEligible?: (element: Element, tourId: string) => void;
   checkElementVisibility?: boolean;
+  debug?: boolean; // When false (default), suppresses all console output
 }
 
 export class PostHogNotInitializedError extends Error {
