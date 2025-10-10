@@ -16,6 +16,7 @@ export class PostHogTours {
   private shouldCheckElementVisibility: boolean;
   private activeTourId: string | null = null;
   private localStorageKey = 'posthog_tours_seen';
+  private debug: boolean;
 
   constructor(options: PostHogToursOptions) {
     this.posthog = options.posthogInstance || posthog;
@@ -23,6 +24,7 @@ export class PostHogTours {
     this.userPropertyPrefix = options.userPropertyPrefix || 'seen_tour_';
     this.defaultOnEligible = options.defaultOnEligible;
     this.shouldCheckElementVisibility = options.checkElementVisibility ?? true;
+    this.debug = options.debug ?? false; // Default to false (silent mode)
 
     // Check if PostHog is initialized
     if (!this.posthog.__loaded) {
@@ -37,6 +39,12 @@ export class PostHogTours {
 
     // Start monitoring all tours
     this.startMonitoringTours();
+  }
+
+  private log(level: 'log' | 'warn' | 'error', ...args: any[]): void {
+    if (this.debug) {
+      console[level](...args);
+    }
   }
 
   private syncLocalStorageWithPostHog(): void {
@@ -61,9 +69,9 @@ export class PostHogTours {
 
   private validateFeatureFlags(): void {
     const missingFlags = Object.keys(this.tours).filter(flag => !this.posthog.isFeatureEnabled(flag));
-    
+
     if (missingFlags.length > 0) {
-      console.warn(`PostHog Tours: The following feature flags are not configured: ${missingFlags.join(', ')}. These tours will be ignored.`);
+      this.log('warn', `PostHog Tours: The following feature flags are not configured: ${missingFlags.join(', ')}. These tours will be ignored.`);
     }
   }
 
@@ -166,7 +174,7 @@ export class PostHogTours {
       if (!stored) return {};
       return JSON.parse(stored);
     } catch (error) {
-      console.warn('Failed to parse posthog_tours_seen from localStorage:', error);
+      this.log('warn', 'Failed to parse posthog_tours_seen from localStorage:', error);
       // Clear corrupted data
       localStorage.removeItem(this.localStorageKey);
       return {};
@@ -178,7 +186,7 @@ export class PostHogTours {
       localStorage.setItem(this.localStorageKey, JSON.stringify(seenTours));
     } catch (error) {
       // Could be QuotaExceededError or other storage issues
-      console.error('Failed to save tour state to localStorage:', error);
+      this.log('error', 'Failed to save tour state to localStorage:', error);
     }
   }
 

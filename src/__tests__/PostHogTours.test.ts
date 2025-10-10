@@ -115,6 +115,7 @@ describe('PostHogTours', () => {
     new PostHogTours({
       tours: sampleTours,
       posthogInstance: mockPosthog as any,
+      debug: true, // Enable debug mode for this test
     });
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -683,6 +684,7 @@ describe('PostHogTours', () => {
       tours = new PostHogTours({
         tours: sampleTours,
         posthogInstance: mockPosthog as any,
+        debug: true, // Enable debug mode to see the warning
       });
 
       tours.markTourAsSeen('feature-a');
@@ -719,6 +721,7 @@ describe('PostHogTours', () => {
       tours = new PostHogTours({
         tours: sampleTours,
         posthogInstance: mockPosthog as any,
+        debug: true, // Enable debug mode to see the error
       });
 
       tours.markTourAsSeen('feature-a');
@@ -741,6 +744,162 @@ describe('PostHogTours', () => {
       getItemSpy.mockRestore();
       setItemSpy.mockRestore();
       consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('debug mode', () => {
+    it('should not log warnings when debug is false (default)', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Create tours with a missing feature flag
+      mockPosthog.isFeatureEnabled.mockReturnValue(false);
+
+      new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        debug: false, // Explicitly set to false
+      });
+
+      // Console.warn should NOT have been called
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should log warnings when debug is true', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Create tours with a missing feature flag
+      mockPosthog.isFeatureEnabled.mockReturnValue(false);
+
+      new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        debug: true, // Enable debug mode
+      });
+
+      // Console.warn SHOULD have been called
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('PostHog Tours: The following feature flags are not configured')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should not log errors for localStorage failures when debug is false', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      // Use jest.spyOn to mock localStorage methods
+      const setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key) => {
+        if (key === 'posthog_tours_seen') {
+          throw new DOMException('QuotaExceededError');
+        }
+      });
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        debug: false, // Silent mode
+      });
+
+      tours.markTourAsSeen('feature-a');
+
+      // Console.error should NOT have been called
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+      setItemSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should log errors for localStorage failures when debug is true', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      // Use jest.spyOn to mock localStorage methods
+      const setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key) => {
+        if (key === 'posthog_tours_seen') {
+          throw new DOMException('QuotaExceededError');
+        }
+      });
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        debug: true, // Enable debug mode
+      });
+
+      tours.markTourAsSeen('feature-a');
+
+      // Console.error SHOULD have been called
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to save tour state'),
+        expect.any(Error)
+      );
+
+      setItemSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should not log warnings for corrupted localStorage when debug is false', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Set corrupted JSON in localStorage
+      localStorage.setItem('posthog_tours_seen', 'not valid JSON{');
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        debug: false, // Silent mode
+      });
+
+      // Try to mark a tour as seen, which will attempt to read the corrupted data
+      tours.markTourAsSeen('feature-a');
+
+      // Console.warn should NOT have been called
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should log warnings for corrupted localStorage when debug is true', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Set corrupted JSON in localStorage
+      localStorage.setItem('posthog_tours_seen', 'not valid JSON{');
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        debug: true, // Enable debug mode
+      });
+
+      // Try to mark a tour as seen, which will attempt to read the corrupted data
+      tours.markTourAsSeen('feature-a');
+
+      // Console.warn SHOULD have been called
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to parse posthog_tours_seen'),
+        expect.any(Error)
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should default to silent mode when debug is not specified', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Create tours without specifying debug option
+      mockPosthog.isFeatureEnabled.mockReturnValue(false);
+
+      new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        // debug not specified - should default to false
+      });
+
+      // Console.warn should NOT have been called (default is silent)
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
     });
   });
 });
