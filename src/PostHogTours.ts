@@ -15,6 +15,7 @@ export class PostHogTours {
   private defaultOnEligible?: (element: Element, tourId: string) => void;
   private shouldCheckElementVisibility: boolean;
   private activeTourId: string | null = null;
+  private localStorageKey = 'posthog_tours_seen';
 
   constructor(options: PostHogToursOptions) {
     this.posthog = options.posthogInstance || posthog;
@@ -31,8 +32,31 @@ export class PostHogTours {
     // Validate that all provided feature flags exist
     this.validateFeatureFlags();
 
+    // Sync localStorage with PostHog on initialization
+    this.syncLocalStorageWithPostHog();
+
     // Start monitoring all tours
     this.startMonitoringTours();
+  }
+
+  private syncLocalStorageWithPostHog(): void {
+    // Get all seen tours from PostHog
+    const userProperties = this.posthog.get_property('$stored_person_properties') || {};
+    const seenTours = this.getSeenToursFromStorage();
+    let hasChanges = false;
+
+    // Check for any tours marked as seen in PostHog but not in localStorage
+    Object.keys(userProperties).forEach(key => {
+      if (key.startsWith(this.userPropertyPrefix) && userProperties[key] && !seenTours[key]) {
+        seenTours[key] = true;
+        hasChanges = true;
+      }
+    });
+
+    // Save to localStorage if there were any changes
+    if (hasChanges) {
+      this.saveSeenToursToStorage(seenTours);
+    }
   }
 
   private validateFeatureFlags(): void {
@@ -136,6 +160,28 @@ export class PostHogTours {
     return result;
   }
 
+  private getSeenToursFromStorage(): Record<string, boolean> {
+    try {
+      const stored = localStorage.getItem(this.localStorageKey);
+      if (!stored) return {};
+      return JSON.parse(stored);
+    } catch (error) {
+      console.warn('Failed to parse posthog_tours_seen from localStorage:', error);
+      // Clear corrupted data
+      localStorage.removeItem(this.localStorageKey);
+      return {};
+    }
+  }
+
+  private saveSeenToursToStorage(seenTours: Record<string, boolean>): void {
+    try {
+      localStorage.setItem(this.localStorageKey, JSON.stringify(seenTours));
+    } catch (error) {
+      // Could be QuotaExceededError or other storage issues
+      console.error('Failed to save tour state to localStorage:', error);
+    }
+  }
+
   private checkVisibility(tourId: string, element: Element): Promise<boolean> {
     return new Promise((resolve) => {
       // If the element is already in the viewport, resolve immediately
@@ -176,15 +222,39 @@ export class PostHogTours {
   }
 
   private hasTourBeenSeen(tourId: string): boolean {
+    const key = `${this.userPropertyPrefix}${tourId}`;
+
+    // Check localStorage first (always up-to-date)
+    const seenTours = this.getSeenToursFromStorage();
+    if (seenTours[key]) {
+      return true;
+    }
+
+    // Check PostHog's properties (might have data from other sessions/devices)
     const userProperties = this.posthog.get_property('$stored_person_properties') || {};
-    return !!userProperties[`${this.userPropertyPrefix}${tourId}`];
+    const seenInPostHog = !!userProperties[key];
+
+    // If PostHog has it but localStorage doesn't, sync localStorage
+    if (seenInPostHog) {
+      seenTours[key] = true;
+      this.saveSeenToursToStorage(seenTours);
+    }
+
+    return seenInPostHog;
   }
 
   public markTourAsSeen(tourId: string): void {
+    const key = `${this.userPropertyPrefix}${tourId}`;
     const properties: Record<string, any> = {};
-    properties[`${this.userPropertyPrefix}${tourId}`] = true;
+    properties[key] = true;
 
+    // 1. Update PostHog (eventual consistency)
     this.posthog.people.set(properties);
+
+    // 2. Also update localStorage immediately (immediate consistency)
+    const seenTours = this.getSeenToursFromStorage();
+    seenTours[key] = true;
+    this.saveSeenToursToStorage(seenTours);
 
     // Also capture an event for analytics purposes
     this.posthog.capture('tour_seen', {

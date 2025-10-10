@@ -63,6 +63,9 @@ describe('PostHogTours', () => {
     // Reset mocks
     jest.clearAllMocks();
 
+    // Clear localStorage
+    localStorage.clear();
+
     // Track user properties
     const userProperties: Record<string, any> = {};
 
@@ -385,5 +388,359 @@ describe('PostHogTours', () => {
 
     // Second tour should now have been triggered
     expect(onEligibleMockB).toHaveBeenCalledTimes(1);
+  });
+
+  describe('localStorage sync', () => {
+    it('should treat localStorage as authoritative even when PostHog disagrees', async () => {
+      // Set up localStorage to indicate tour was seen
+      localStorage.setItem('posthog_tours_seen', JSON.stringify({
+        'seen_tour_feature-a': true
+      }));
+
+      // PostHog says tour was NOT seen (simulating sync delay or failure)
+      mockPosthog.get_property.mockReturnValue({});
+
+      const onEligibleMock = jest.fn();
+      tours = new PostHogTours({
+        tours: {
+          'feature-a': {
+            ...sampleTours['feature-a'],
+            onEligible: onEligibleMock,
+          },
+        },
+        posthogInstance: mockPosthog as any,
+        checkElementVisibility: false,
+      });
+
+      // Check tour eligibility - should NOT be eligible because localStorage says it was seen
+      const result = await tours.checkTourEligibility('feature-a');
+
+      expect(result.alreadySeen).toBe(true);
+      expect(result.eligible).toBe(false);
+      expect(onEligibleMock).not.toHaveBeenCalled();
+
+      // Verify localStorage is still authoritative
+      const stored = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored['seen_tour_feature-a']).toBe(true);
+    });
+
+    it('should persist localStorage across multiple PostHogTours instances', () => {
+      // First instance marks tour as seen
+      const tours1 = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+      });
+
+      tours1.markTourAsSeen('feature-a');
+
+      // Verify it was saved to localStorage
+      const stored1 = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored1['seen_tour_feature-a']).toBe(true);
+
+      // Create a new instance (simulating page reload or component remount)
+      // Mock PostHog to return empty (simulating it hasn't synced yet)
+      mockPosthog.get_property.mockReturnValue({});
+
+      const tours2 = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+      });
+
+      // The new instance should still know the tour was seen from localStorage
+      tours2.checkTourEligibility('feature-a').then(result => {
+        expect(result.alreadySeen).toBe(true);
+        expect(result.eligible).toBe(false);
+      });
+    });
+
+    it('should prevent tour from showing again immediately after marking as seen', async () => {
+      // Start with clean state
+      localStorage.clear();
+      mockPosthog.get_property.mockReturnValue({});
+
+      const onEligibleMock = jest.fn();
+      tours = new PostHogTours({
+        tours: {
+          'feature-a': {
+            ...sampleTours['feature-a'],
+            onEligible: onEligibleMock,
+          },
+        },
+        posthogInstance: mockPosthog as any,
+        checkElementVisibility: false,
+      });
+
+      // First check - tour should be eligible
+      const result1 = await tours.checkTourEligibility('feature-a');
+      expect(result1.eligible).toBe(true);
+      expect(onEligibleMock).toHaveBeenCalledTimes(1);
+
+      // Mark tour as seen
+      tours.markTourAsSeen('feature-a');
+
+      // Immediately check again (before PostHog could possibly sync)
+      const result2 = await tours.checkTourEligibility('feature-a');
+      expect(result2.alreadySeen).toBe(true);
+      expect(result2.eligible).toBe(false);
+      expect(onEligibleMock).toHaveBeenCalledTimes(1); // Should NOT be called again
+
+      // Verify localStorage has it
+      const stored = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored['seen_tour_feature-a']).toBe(true);
+    });
+
+    it('should simulate real-world tour interaction across page loads', async () => {
+      // Scenario: User sees tour on page load 1, marks it as seen, then refreshes the page
+
+      // Page Load 1: Tour shows for the first time
+      localStorage.clear();
+      mockPosthog.get_property.mockReturnValue({});
+
+      const tours1 = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        checkElementVisibility: false,
+      });
+
+      // Tour should be eligible
+      const result1 = await tours1.checkTourEligibility('feature-a');
+      expect(result1.eligible).toBe(true);
+      expect(result1.alreadySeen).toBe(false);
+
+      // User completes the tour
+      tours1.markTourAsSeen('feature-a');
+
+      // Verify localStorage was updated
+      const stored1 = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored1['seen_tour_feature-a']).toBe(true);
+
+      // Page Load 2: User refreshes immediately (PostHog hasn't synced yet)
+      mockPosthog.get_property.mockReturnValue({}); // PostHog still doesn't have the data
+
+      const tours2 = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        checkElementVisibility: false,
+      });
+
+      // Tour should NOT show again thanks to localStorage
+      const result2 = await tours2.checkTourEligibility('feature-a');
+      expect(result2.eligible).toBe(false);
+      expect(result2.alreadySeen).toBe(true);
+
+      // Page Load 3: Much later, PostHog has synced
+      mockPosthog.get_property.mockReturnValue({
+        'seen_tour_feature-a': true
+      });
+
+      const tours3 = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        checkElementVisibility: false,
+      });
+
+      // Tour still shouldn't show (both localStorage and PostHog agree)
+      const result3 = await tours3.checkTourEligibility('feature-a');
+      expect(result3.eligible).toBe(false);
+      expect(result3.alreadySeen).toBe(true);
+
+      // Verify localStorage is still intact
+      const stored3 = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored3['seen_tour_feature-a']).toBe(true);
+    });
+
+    it('should maintain localStorage authority even after PostHog sync', async () => {
+      // localStorage says tour was seen
+      localStorage.setItem('posthog_tours_seen', JSON.stringify({
+        'seen_tour_feature-a': true
+      }));
+
+      // Initially PostHog doesn't have it
+      mockPosthog.get_property.mockReturnValue({});
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        checkElementVisibility: false,
+      });
+
+      // Check - should not be eligible (localStorage says seen)
+      const result1 = await tours.checkTourEligibility('feature-a');
+      expect(result1.alreadySeen).toBe(true);
+
+      // Now simulate PostHog syncing and having the data
+      mockPosthog.get_property.mockReturnValue({
+        'seen_tour_feature-a': true
+      });
+
+      // Check again - should still not be eligible
+      const result2 = await tours.checkTourEligibility('feature-a');
+      expect(result2.alreadySeen).toBe(true);
+
+      // Now simulate PostHog losing the data (e.g., user logged out)
+      mockPosthog.get_property.mockReturnValue({});
+
+      // localStorage should STILL be authoritative
+      const result3 = await tours.checkTourEligibility('feature-a');
+      expect(result3.alreadySeen).toBe(true);
+      expect(result3.eligible).toBe(false);
+    });
+
+    it('should sync PostHog data to localStorage on initialization', () => {
+      // Set up PostHog to have some seen tours
+      mockPosthog.get_property.mockReturnValue({
+        'seen_tour_feature-a': true,
+        'seen_tour_feature-b': true,
+        'other_property': 'value' // Should be ignored
+      });
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+      });
+
+      // Check that localStorage was updated
+      const stored = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored['seen_tour_feature-a']).toBe(true);
+      expect(stored['seen_tour_feature-b']).toBe(true);
+      expect(stored['other_property']).toBeUndefined();
+    });
+
+    it('should write to both localStorage and PostHog when marking tour as seen', () => {
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+        userPropertyPrefix: 'test_seen_',
+      });
+
+      tours.markTourAsSeen('feature-a');
+
+      // Check PostHog was updated
+      expect(mockPosthog.people.set).toHaveBeenCalledWith({
+        'test_seen_feature-a': true,
+      });
+
+      // Check localStorage was updated
+      const stored = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored['test_seen_feature-a']).toBe(true);
+    });
+
+    it('should check localStorage first when checking if tour was seen', async () => {
+      // Set up localStorage to have the tour marked as seen
+      localStorage.setItem('posthog_tours_seen', JSON.stringify({
+        'seen_tour_feature-a': true
+      }));
+
+      // PostHog doesn't have it marked as seen
+      mockPosthog.get_property.mockReturnValue({});
+
+      const onEligibleMock = jest.fn();
+      tours = new PostHogTours({
+        tours: {
+          'feature-a': {
+            ...sampleTours['feature-a'],
+            onEligible: onEligibleMock,
+          },
+        },
+        posthogInstance: mockPosthog as any,
+      });
+
+      // Check tour eligibility - should not be eligible since localStorage says it was seen
+      const result = await tours.checkTourEligibility('feature-a');
+      expect(result.alreadySeen).toBe(true);
+      expect(result.eligible).toBe(false);
+      expect(onEligibleMock).not.toHaveBeenCalled();
+    });
+
+    it('should sync from PostHog to localStorage when PostHog has data but localStorage does not', async () => {
+      // PostHog has the tour marked as seen
+      mockPosthog.get_property.mockReturnValue({
+        'seen_tour_feature-a': true
+      });
+
+      // localStorage is empty
+      localStorage.clear();
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+      });
+
+      // Check tour eligibility - this should sync localStorage
+      await tours.checkTourEligibility('feature-a');
+
+      // localStorage should now have the data
+      const stored = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored['seen_tour_feature-a']).toBe(true);
+    });
+
+    it('should handle corrupted localStorage data gracefully', () => {
+      // Set corrupted JSON in localStorage
+      localStorage.setItem('posthog_tours_seen', 'not valid JSON{');
+
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+      });
+
+      tours.markTourAsSeen('feature-a');
+
+      // Should have warned about corrupted data
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to parse posthog_tours_seen'),
+        expect.any(Error)
+      );
+
+      // Should have cleared and set new data
+      const stored = JSON.parse(localStorage.getItem('posthog_tours_seen') || '{}');
+      expect(stored['seen_tour_feature-a']).toBe(true);
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should handle localStorage quota exceeded errors gracefully', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      // Make sure PostHog doesn't have any tours marked as seen initially
+      mockPosthog.get_property.mockReturnValue({});
+
+      // Use jest.spyOn to mock localStorage methods
+      const getItemSpy = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('{}');
+      const setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
+        // Only throw for our specific key
+        if (key === 'posthog_tours_seen') {
+          throw new DOMException('QuotaExceededError');
+        }
+      });
+
+      // Create tours instance after mocking
+      tours = new PostHogTours({
+        tours: sampleTours,
+        posthogInstance: mockPosthog as any,
+      });
+
+      tours.markTourAsSeen('feature-a');
+
+      // Check if setItem was called
+      expect(setItemSpy).toHaveBeenCalledWith('posthog_tours_seen', expect.any(String));
+
+      // Should have logged error
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to save tour state'),
+        expect.any(Error)
+      );
+
+      // PostHog should still have been updated
+      expect(mockPosthog.people.set).toHaveBeenCalledWith({
+        'seen_tour_feature-a': true,
+      });
+
+      // Restore mocks
+      getItemSpy.mockRestore();
+      setItemSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    });
   });
 });
