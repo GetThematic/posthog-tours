@@ -1,6 +1,6 @@
 {
   "name": "posthog-tours",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A TypeScript package for creating guided tours in PostHog",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -38,6 +38,11 @@
   },
   "peerDependencies": {
     "posthog-js": "^1.232.6"
+  },
+  "overrides": {
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "^4.1.0"
+    }
   },
   "engines": {
     "node": ">=14.0.0"
