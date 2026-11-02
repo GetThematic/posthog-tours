@@ -39,6 +39,11 @@
   "peerDependencies": {
     "posthog-js": "^1.232.6"
   },
+  "overrides": {
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "^4.1.0"
+    }
+  },
   "engines": {
     "node": ">=14.0.0"
   }
